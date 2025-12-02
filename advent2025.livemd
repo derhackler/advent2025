@@ -1,0 +1,212 @@
+# Advent 2025
+
+```elixir
+Mix.install([
+  {:req, "~> 0.5.8"}
+])
+```
+
+## Introduction
+
+This notebook is my attempt to solve the [Advent of Code 2025](https://adventofcode.com/) challenges.
+
+To run, set the SESSION livebook variable to the value of the session cookie that you find on the advent of code homepage.
+
+## Utils
+
+```elixir
+defmodule Input do
+  def for_day(day) do
+    fname = Path.join(__DIR__,"day#{dayformat(day)}.txt")
+    
+    if (File.exists?(fname)) do
+      File.read!(fname)
+    else
+      headers = [cookie: "session=" <> System.get_env("LB_SESSION")]
+      input = Req.get!("https://adventofcode.com/2025/day/#{day}/input",headers: headers).body
+      File.write!(fname,input)
+      input
+    end
+  end
+
+  defp dayformat(day) when day < 10, do: "0#{day}"
+  defp dayformat(day), do: "#{day}"
+    
+end
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 1
+
+```elixir
+example = """
+L68
+L30
+R48
+L5
+R60
+L55
+L1
+L99
+R14
+L82
+"""
+```
+
+```elixir
+defmodule Day1 do
+  def solve(input, :part1) do
+    parse(input)
+    |> Enum.reduce([50], fn {dir,cnt}, [pos|_rest]=acc -> 
+        new_pos = case dir do
+          "L" -> rem((pos-cnt)+100, 100)
+          "R" -> rem(pos + cnt, 100)
+        end
+
+        [new_pos|acc]
+      end)
+    |> Enum.count(& &1 == 0)
+  end
+
+  def solve(input, :part2) do
+    parse(input)
+    |> Enum.reduce([{50,0}], fn {dir,cnt}, [{pos,_clicks}|_rest]=acc ->     
+        {clicks,turns_left} = {div(cnt,100), rem(cnt,100)}
+      
+        {new_pos,new_clicks} = case dir do
+          "L" -> 
+            clicks = if pos == 0, do: clicks-1, else: clicks
+            {rem((pos-turns_left)+100, 100), (if (pos-turns_left)<=0, do: clicks+1, else: clicks) }
+          "R" -> 
+            {rem(pos + turns_left, 100), (if (pos+turns_left)>=100, do: clicks+1, else: clicks)}
+        end
+
+        [{new_pos,new_clicks}|acc]
+      end)
+    |> Enum.sum_by(fn {_,clicks} -> clicks end)
+  end
+
+  def parse(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn <<x,rem::binary>> -> {<<x>>,String.to_integer(rem)} end)
+  end
+end
+```
+
+```elixir
+example |> Day1.solve(:part1)
+```
+
+```elixir
+Input.for_day(1) |> Day1.solve(:part1)
+```
+
+```elixir
+example |> Day1.solve(:part2)
+```
+
+```elixir
+Input.for_day(1) |> Day1.solve(:part2)
+```
+
+Remarks:
+
+* I don't like my solution. Too long. Too hard to read.
+* Maybe change from left-turn special handling to converting into right turn only
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 2
+
+```elixir
+num = "123456"
+half = div(String.length(num), 2)
+{s1,s2} = String.split_at(num,half)
+
+```
+
+```elixir
+example = "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124"
+
+```
+
+```elixir
+defmodule Day2 do
+  require Integer
+  
+  def solve(input, :part1) do
+    input 
+    |> parse()
+    |> Enum.flat_map(fn [min,max] -> 
+        Range.new(min,max)
+        |> Enum.filter(& is_invalid_part1?/1)
+      end)
+    |> Enum.sum()
+  end
+
+  def solve(input, :part2) do
+    input 
+    |> parse()
+    |> Enum.flat_map(fn [min,max] -> 
+        Range.new(min,max)
+        |> Enum.filter(& is_invalid_part2?/1)
+      end)
+    |> Enum.sum()
+  end
+
+  def is_invalid_part1?(number) do
+    number = Integer.to_string(number)
+    half = div(String.length(number), 2)
+    {part1,part2} = String.split_at(number,half)
+    
+    cond do
+      Integer.is_odd(String.length(number)) -> false
+      part1 == part2 -> true
+      :else -> false
+    end
+  end
+
+  def is_invalid_part2?(number) when number < 10, do: false
+  def is_invalid_part2?(number) do
+    digits = Integer.digits(number)
+    
+    repetitions = for chunk_size <- 1..(div(length(digits),2)+1) do
+      Enum.chunk_every(digits,chunk_size)
+      |> Enum.frequencies()
+    end
+
+    Enum.any?(repetitions, fn freq -> 
+        case Map.to_list(freq) do
+          [{_key,num}] when num >= 2 -> true
+          _any -> false
+        end
+    end
+   )
+  end
+
+  def parse(input) do
+    input
+    |> String.split([",","-","\n"], trim: true)
+    |> Enum.map(& String.to_integer/1 )
+    |> Enum.chunk_every(2)
+  end
+end
+```
+
+```elixir
+example |> Day2.solve(:part1)
+```
+
+```elixir
+Input.for_day(2) |> Day2.solve(:part1)
+```
+
+```elixir
+example |> Day2.solve(:part2)
+```
+
+```elixir
+Input.for_day(2) |> Day2.solve(:part2)
+```
