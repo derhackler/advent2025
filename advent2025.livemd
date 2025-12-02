@@ -12,6 +12,8 @@ This notebook is my attempt to solve the [Advent of Code 2025](https://adventofc
 
 To run, set the SESSION livebook variable to the value of the session cookie that you find on the advent of code homepage.
 
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fraw.githubusercontent.com%2Fderhackler%2Fadvent2025%2Frefs%2Fheads%2Fmain%2Fadvent2025.livemd)
+
 ## Utils
 
 ```elixir
@@ -119,13 +121,6 @@ Remarks:
 <!-- livebook:{"branch_parent_index":1} -->
 
 ## Day 2
-
-```elixir
-num = "123456"
-half = div(String.length(num), 2)
-{s1,s2} = String.split_at(num,half)
-
-```
 
 ```elixir
 example = "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124"
