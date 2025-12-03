@@ -3,7 +3,7 @@
 ```elixir
 Mix.install([
   {:req, "~> 0.5.8"}
-])
+],config: [iex: [inspect: [charlists: :as_lists]]])
 ```
 
 ## Introduction
@@ -204,4 +204,83 @@ example |> Day2.solve(:part2)
 
 ```elixir
 Input.for_day(2) |> Day2.solve(:part2)
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 3
+
+```elixir
+example = """
+987654321111111
+811111111111119
+234234234234278
+818181911112111
+"""
+```
+
+* convert to {digit,on,off}
+
+```elixir
+defmodule Day3 do
+  def solve(input,:part1) do
+    input
+    |> parse()
+    |> Enum.map(& voltage(&1,2))
+    |> Enum.sum()
+  end
+
+  def solve(input,:part2) do
+    input
+    |> parse()
+    |> Enum.map(& voltage(&1,12))
+    |> Enum.sum()    
+  end
+
+  def voltage(bank,batteries) do
+    bank = bank |> String.to_integer() |> Integer.digits()
+    solution = turn_on_highest([],bank,batteries)
+    solution |> Enum.join() |> String.to_integer()
+  end
+
+  def turn_on_highest(numbers,_,0), do: Enum.reverse(numbers)
+  def turn_on_highest(numbers,bankpart,to_turn) do
+    left = length(bankpart) # available slots
+    max = left - to_turn + 1 # cannot be after this
+    {within,remaining} = Enum.split(bankpart,max)
+
+    {maxidx,_idx,val} = Enum.reduce(within,{0,0,0},fn val,{maxidx,idx,max} -> 
+      cond do
+        val > max -> {idx,idx+1,val}
+        :else -> {maxidx,idx+1,max}
+      end
+    end)
+
+    r2 = Enum.drop(within,maxidx+1)
+
+    turn_on_highest([val|numbers],r2++remaining,to_turn-1)
+  end
+
+
+  def parse(input) do
+    input
+    |> String.split("\n", trim: true)
+  end
+end
+```
+
+```elixir
+example |> Day3.solve(:part1)
+```
+
+```elixir
+example |> Day3.solve(:part2)
+```
+
+```elixir
+Input.for_day(3) |> Day3.solve(:part1)
+```
+
+```elixir
+Input.for_day(3) |> Day3.solve(:part2)
 ```
