@@ -284,3 +284,197 @@ Input.for_day(3) |> Day3.solve(:part1)
 ```elixir
 Input.for_day(3) |> Day3.solve(:part2)
 ```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 4
+
+```elixir
+example = """
+..@@.@@@@.
+@@@.@.@.@@
+@@@@@.@.@@
+@.@@@@..@.
+@@.@@@@.@@
+.@@@@@@@.@
+.@.@.@.@@@
+@.@@@.@@@@
+.@@@@@@@@.
+@.@.@@@.@.
+"""
+```
+
+```elixir
+defmodule Grid do
+  defstruct [:cells]
+
+  def new(cells) do
+    # cells: [{{x,y},val}]
+    %Grid{cells: Enum.into(cells,%{})}
+  end
+
+  def adjacent(grid = %Grid{}, {x,y}) do
+    # returns the coordinate as well as the cell value
+    shift_x = [-1,0,1]
+    shift_y = [-1,0,1]
+
+    for sx <- shift_x, sy <- shift_y, {sx,sy} != {0,0}, reduce: [] do
+      acc -> 
+        case Map.get(grid.cells, {x+sx,y+sy}, nil) do
+          nil -> acc
+          val -> [{{sx,sy}, val} | acc]
+        end
+    end
+  end
+
+  def drop(grid = %Grid{}, cells) do
+    # let's ignore the bug that the size can change...
+    %Grid{grid | cells: Map.drop(grid.cells, cells)}
+  end
+
+end
+```
+
+```elixir
+defmodule Day4 do
+  def solve(input, :part1) do
+    grid = input |> parse()
+
+    grid.cells
+    |> Enum.filter(fn {_xy,val} -> val == ?@ end)
+    |> Enum.filter(fn {xy,_val} -> adjacent_rolls_count(grid,xy) < 4 end)
+    |> Enum.count()
+  end
+
+  def solve(input, :part2) do
+    grid = input |> parse()
+    recursive_remove(grid,true,0)
+  end
+
+  def recursive_remove(_grid,false,cnt), do: cnt
+  def recursive_remove(grid,true,cnt) do
+    to_remove = grid.cells
+    |> Enum.filter(fn {_xy,val} -> val == ?@ end)
+    |> Enum.filter(fn {xy,_val} -> adjacent_rolls_count(grid,xy) < 4 end)
+    |> Enum.map(fn {xy,_val} -> xy end)
+
+    new_grid = Grid.drop(grid, to_remove)
+
+    recursive_remove(new_grid,to_remove != [], cnt + length(to_remove))
+  end
+
+  def adjacent_rolls_count(grid,{x,y}) do
+    Grid.adjacent(grid,{x,y})
+    |> Enum.filter(fn {_xy,val} -> val == ?@ end)
+    |> Enum.count()
+  end
+  
+  
+  def parse(input) do
+    input |> to_grid({0,0}, [])
+  end
+
+  def to_grid("",_xy,cells), do: Grid.new(Enum.reverse(cells))
+  def to_grid(<<"\n",rem::binary>>,{_x,y},cells), do: to_grid(rem,{0,y+1},cells)
+  def to_grid(<<char,rem::binary>>,{x,y},cells) do
+    to_grid(rem,{x+1,y},[{{x,y},char}|cells])
+  end
+end
+```
+
+```elixir
+example |> Day4.solve(:part1)
+```
+
+```elixir
+example |> Day4.solve(:part2)
+```
+
+```elixir
+Input.for_day(4) |> Day4.solve(:part1)
+```
+
+```elixir
+Input.for_day(4) |> Day4.solve(:part2)
+```
+
+```elixir
+defmodule Day4Alternative do
+
+  def solve(input, :part2) do
+    grid = input |> parse()
+
+    # get a map with only the neighbors count
+    grid = grid.cells
+      |> Enum.filter(fn {_xy,val} -> val == ?@ end)
+      |> Enum.map(fn {xy,_val} -> {xy,adjacent_rolls_count(grid,xy)} end)
+      |> Enum.into(%{})
+
+    newgrid = remove(grid)
+
+    Enum.count(grid) - Enum.count(newgrid)
+  end
+
+  def remove(grid) do
+    sorted = Enum.sort_by(grid, fn {{x,y},_} -> {x,y} end)
+    
+    newgrid = Enum.reduce(sorted, grid, fn {xy,_}, acc -> 
+      case Map.get(acc,xy) do
+        nil -> acc # the cell does not exist anymore
+        val when val < 4 -> drop_and_decrement(acc,xy) # we can remove it
+        _else -> acc # can't do anything
+      end
+    end)
+
+    if Enum.count(grid) == Enum.count(newgrid) do
+      newgrid
+    else
+      remove(newgrid)
+    end
+  end
+
+  def drop_and_decrement(grid,{x,y} = _to_drop) do
+    # returns the coordinate as well as the cell value
+    shift_x = [-1,0,1]
+    shift_y = [-1,0,1]
+
+    for sx <- shift_x, sy <- shift_y, {sx,sy} != {0,0}, reduce: Map.delete(grid,{x,y}) do
+      grid -> 
+        adj_xy = {x+sx,y+sy}
+        case Map.get(grid,adj_xy) do
+          nil -> grid
+          val when val-1 < 4 -> drop_and_decrement(grid,adj_xy)
+          val -> Map.put(grid,adj_xy,val-1)
+        end
+    end
+  end
+
+  def adjacent_rolls_count(grid,{x,y}) do
+    Grid.adjacent(grid,{x,y})
+    |> Enum.filter(fn 
+      {_xy,nil} -> false
+      {_xy,?@} -> true
+      _ -> false
+        end)
+    |> Enum.count()
+  end
+  
+  def parse(input) do
+    input |> to_grid({0,0}, [])
+  end
+
+  def to_grid("",_xy,cells), do: Grid.new(Enum.reverse(cells))
+  def to_grid(<<"\n",rem::binary>>,{_x,y},cells), do: to_grid(rem,{0,y+1},cells)
+  def to_grid(<<char,rem::binary>>,{x,y},cells) do
+    to_grid(rem,{x+1,y},[{{x,y},char}|cells])
+  end
+end
+```
+
+```elixir
+example |> Day4Alternative.solve(:part2)
+```
+
+```elixir
+Input.for_day(4) |> Day4Alternative.solve(:part2)
+```
