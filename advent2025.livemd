@@ -586,29 +586,6 @@ tests
 ```
 
 ```elixir
-use ExUnit
-ExUnit.start()
-
-dataset = [
-  %{id: 1, input: 2, expect: 4},
-  %{id: 2, input: 3, expect: 9}
-]
-
-for %{id: id, input: in_, expect: ex} <- dataset do
-  test "row #{id}" do
-    assert my_transform(unquote(in_)) == unquote(ex)
-  end
-end
-
-```
-
-```elixir
-import ExUnit.Assertions
-
-assert 1 == 2
-```
-
-```elixir
 Input.for_day(5) |> Day5.solve(:part2)
 ```
 
