@@ -478,3 +478,140 @@ example |> Day4Alternative.solve(:part2)
 ```elixir
 Input.for_day(4) |> Day4Alternative.solve(:part2)
 ```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 5
+
+```elixir
+example = """
+3-5
+10-14
+16-20
+12-18
+
+1
+5
+8
+11
+17
+32
+"""
+```
+
+```elixir
+defmodule Day5 do
+  def solve(input,:part1) do
+    {fresh_ingredient_ranges,ingredients} = parse(input)
+    ranges = sort_ranges(fresh_ingredient_ranges)    
+
+    fresh = for i <- ingredients do
+      Enum.reduce_while(ranges, false, fn r,_acc -> 
+          case Enum.member?(r,i) do
+            true -> {:halt, true}
+            false -> {:cont, false}
+          end
+        end)
+    end
+
+    Enum.
+
+    Enum.sum_by(fresh,fn 
+      true -> 1
+      false -> 0 
+    end)
+  end
+
+  def solve(input, :part2) do
+    {ranges,_ingredients} = parse(input)
+    
+    ranges = ranges |> Enum.sort_by(fn [min,_max] -> min end)
+    
+    {_,cnt} = Enum.reduce(ranges,{0,0},fn [min,max],{last_counted,count} ->
+        cond do
+          min > last_counted -> {max, count + (max - min) + 1} # distinct
+          min <= last_counted && max > last_counted -> {max, count + (max - last_counted)} # overlapping
+          :else -> {last_counted, count} # containing
+        end
+      end)
+
+    cnt
+  end
+
+  
+
+  def sort_ranges(ranges) do
+    ranges
+    |> Enum.sort_by(fn [min,_max] -> min end)
+    |> Enum.map(fn [min,max] -> Range.new(min,max) end)
+  end
+
+  def parse(input) do
+    [ranges,ingredients] = String.split(input,"\n\n",trim: true)
+    ranges = String.split(ranges, ["-","\n"],trim: true) 
+      |> Enum.map(& String.to_integer/1)
+      |> Enum.chunk_every(2)
+    ingredients = String.split(ingredients,"\n",trim: true)
+      |> Enum.map(& String.to_integer/1)
+    {ranges,ingredients}
+  end
+end
+```
+
+```elixir
+example |> Day5.solve(:part1)
+```
+
+```elixir
+Input.for_day(5) |> Day5.solve(:part1)
+```
+
+```elixir
+import ExUnit.Assertions
+
+tests =[
+  ["1-3\n\n0", 3], # alone
+  ["1-3\n1-3\n\n0", 3], # full overlap
+  ["1-3\n2-5\n\n0", 5], # partial overlap
+  ["1-3\n3-5\n\n0", 5], # last digit overlap
+  ["1-3\n5-5\n\n0", 4], # no overlap
+  ["1-5\n2-3\n\n0", 5], # fully contained
+]
+
+tests
+|> Enum.each(fn [input,expected] -> 
+    sol = Day5.solve(input,:part2)
+    assert expected == sol, "expected #{expected} got #{sol}. Input: \n#{input} "
+  end)
+```
+
+```elixir
+use ExUnit
+ExUnit.start()
+
+dataset = [
+  %{id: 1, input: 2, expect: 4},
+  %{id: 2, input: 3, expect: 9}
+]
+
+for %{id: id, input: in_, expect: ex} <- dataset do
+  test "row #{id}" do
+    assert my_transform(unquote(in_)) == unquote(ex)
+  end
+end
+
+```
+
+```elixir
+import ExUnit.Assertions
+
+assert 1 == 2
+```
+
+```elixir
+Input.for_day(5) |> Day5.solve(:part2)
+```
+
+```elixir
+example |> Day5.solve(:part2)
+```
