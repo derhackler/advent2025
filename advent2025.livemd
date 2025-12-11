@@ -1,9 +1,13 @@
 # Advent 2025
 
 ```elixir
-Mix.install([
-  {:req, "~> 0.5.8"}
-],config: [iex: [inspect: [charlists: :as_lists]]])
+Mix.install(
+  [
+    {:req, "~> 0.5.8"},
+    {:kino, "~> 0.18.0"}
+  ],
+  config: [iex: [inspect: [charlists: :as_lists]]]
+)
 ```
 
 ## Introduction
@@ -591,4 +595,1083 @@ Input.for_day(5) |> Day5.solve(:part2)
 
 ```elixir
 example |> Day5.solve(:part2)
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 6
+
+```elixir
+example = """
+123 328  51 64 
+ 45 64  387 23 
+  6 98  215 314
+*   +   *   +  
+"""
+```
+
+```elixir
+defmodule Day6 do
+  def solve(input,:part1) do
+    cols = input |> parse
+    res = for col <- cols do
+      col = Enum.reverse(col) |> Enum.map(& String.trim(&1))
+      [first|rest] = col
+      case first do
+        "*" -> rest |> Enum.map(& String.to_integer/1) |> Enum.reduce(1, & Kernel.*/2)
+        "+" -> rest |> Enum.map(& String.to_integer/1) |> Enum.reduce(0, & Kernel.+/2)
+      end
+    end
+
+    Enum.sum(res)
+  end
+
+  def solve(input,:part2) do
+    cols = input |> parse
+    res = for col <- cols do
+      # ignore the operand row (last cell in column)
+      [operator|numbers] = Enum.reverse(col)
+
+      # reverse the numbers again so they are in the correct order
+      numbers = Enum.reverse(numbers)
+      # turn into individual chars
+      numbers = numbers |> Enum.map(& String.graphemes(&1))
+      # transpose to get them top to bottom
+      numbers = transpose(numbers)
+      # turn into an actual number
+      numbers = numbers |> Enum.map(& to_number/1)
+
+      case String.trim(operator) do
+        "*" -> numbers |> Enum.reduce(1, & Kernel.*/2)
+        "+" -> numbers |> Enum.reduce(0, & Kernel.+/2)
+      end
+    end
+
+    Enum.sum(res)
+  end
+
+  def parse(input) do
+    lines = input |> String.split("\n",trim: true)
+
+    # get the columns by masking over the binary
+    # only cells where there is always a whitespace
+    # will be TRUE in the final mask
+    mask = mask_multiple(lines)
+    columns = cols_from_mask(mask)
+    cells = lines |> Enum.map(& cells(&1,columns))
+    columns = transpose(cells)
+
+    columns
+  end
+
+  def to_number(chars) do
+    Enum.join(chars)
+    |> String.trim()
+    |> String.to_integer()
+  end
+
+  # get all cells of a line based on the column definition
+  def cells(line,columns), do: cells(line,columns,[])
+  defp cells(line,[col|columns],cells) do
+    <<cell::binary-size(col),rest::binary>> = line
+    case rest do
+      "" -> Enum.reverse([cell|cells])
+      <<_ws_to_ignore,rest::binary>> -> cells(rest,columns,[cell|cells])
+    end
+  end
+
+  # transposes a list
+  def transpose(lists) do
+    Enum.zip(lists) |> Enum.map(& Tuple.to_list/1)
+  end
+  
+  # identifying the columns:
+  # whenever the mask is true it's a column
+  # returns the counts of chars in the column
+  # excluding the delimitter
+  def cols_from_mask(mask), do: cols_from_mask(mask,0,[])
+  def cols_from_mask(mask,col_width,cols)
+  def cols_from_mask([],cw,cols), do: [cw|cols] |> Enum.reverse()
+  def cols_from_mask([true|rem],cw,cols), do: cols_from_mask(rem,0,[cw|cols])
+  def cols_from_mask([false|rem],cw,cols), do: cols_from_mask(rem,cw+1,cols)
+
+  def mask_multiple(lines) do
+    width = String.length(Enum.at(lines,0))
+    mask = initial_mask(width)
+    Enum.reduce(lines,mask,fn line,acc -> mask(line,acc,[]) end )
+  end
+
+  # masking algorithm:
+  # go through all chars
+  # if at the end: return the mask
+  # if it is a whitespace: AND it with the mask and append to new mask --> it's only true if the mask is also true
+  # if it is not a whitespace: it's false --> add false
+  def mask(string,mask,newmask)
+  def mask(<<>>,_,newmask), do: newmask |> Enum.reverse()
+  def mask(<<" ",rest::binary>>,[mask|rem_mask],newmask) do
+    mask(rest,rem_mask,[ (true and mask) | newmask])
+  end
+  def mask(<<_c,rest::binary>>,[_mask|rem_mask],newmask) do
+    mask(rest,rem_mask,[false | newmask])
+  end
+
+  def initial_mask(count) do
+    for _ <- 1..count, do: true
+  end
+  
+end
+```
+
+```elixir
+import ExUnit.Assertions
+assert Day6.initial_mask(3) == [true,true,true]
+
+# test masks {line,mask,expected}
+test = [
+  {"   ",[true,true,true],[true,true,true]},
+  {" 1 ",[true,true,true],[true,false,true]},
+  {" 1 ",[false,true,false],[false,false,false]}
+]
+
+Enum.each(test, fn {input,mask,expected} -> 
+    assert Day6.mask(input,mask,[]) == expected
+end)
+
+# test masking multiple lines
+test = [
+  {[ [". ",". "] ], [false,true]},
+  {[ [". "," ."] ], [false,false]},
+  {[ [".  "," . ","   "] ], [false,false,true]},
+  {[ ["123 x"," 45 x","  6 x","*   x"] ], [false,false,false,true,false]}
+]
+
+Enum.each(test, fn {args,expected} -> 
+    assert apply(&Day6.mask_multiple/1,args) == expected
+end)
+
+# test getting the column widths from masks
+test = [
+  {[ [false] ], [1]},
+  {[ [false,true,false,false] ], [1,2]},
+  {[ [false,true,false,false,true] ], [1,2,0]},
+  {[ [false,false,false,true,false]], [3,1]}
+]
+
+Enum.each(test, fn {args,expected} -> 
+    assert apply(&Day6.cols_from_mask/1,args) == expected
+end)
+
+# test getting cells from binaries
+test = [
+  {[ "abc", [3] ], ["abc"]},
+  {["123 4567",[3,4]], ["123","4567"]},
+  {["  1 1",[3,1]], ["  1","1"]},
+  
+]
+
+Enum.each(test, fn {args,expected} -> 
+    assert apply(&Day6.cells/2,args) == expected
+end)
+
+# test getting cells from binaries
+test = [
+  {[ [[1,2],[3,4]] ], [[1,3],[2,4]]}  
+]
+
+Enum.each(test, fn {args,expected} -> 
+    assert apply(&Day6.transpose/1,args) == expected
+end)
+```
+
+```elixir
+example |> Day6.solve(:part1)
+```
+
+```elixir
+Input.for_day(6) |> Day6.solve(:part1)
+```
+
+```elixir
+example |> Day6.solve(:part2)
+```
+
+```elixir
+Input.for_day(6) |> Day6.solve(:part2)
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 7
+
+```elixir
+example = """
+.......S.......
+...............
+.......^.......
+...............
+......^.^......
+...............
+.....^.^.^.....
+...............
+....^.^...^....
+...............
+...^.^...^.^...
+...............
+..^...^.....^..
+...............
+.^.^.^.^.^...^.
+...............
+"""
+```
+
+```elixir
+defmodule Day7 do
+  def solve(input,:part1) do
+    # idea:
+    # have a set with the heads of rays
+    # advance each head
+    # if it hits a splitter, split into to unique heads, and increment the split count
+    # else advance it downwards
+    {grid,height} = parse(input)
+    heads = MapSet.new([Map.get(grid,"S")])
+
+    {_heads,splits} = Enum.reduce(0..height,{heads,0},fn _line, {heads,splits} -> 
+        advance_heads(heads,splits,grid)
+    end)
+
+    splits
+  end
+
+   def solve(input,:part2) do
+    # idea:
+    # have a set with the heads of rays
+    # advance each head
+    # if it hits a splitter, split into to unique heads, and increment the split count
+    # else advance it downwards
+    {grid,height} = parse(input)
+    startpos = Map.get(grid,"S")
+    heads = Map.new([{startpos,1}])
+
+    heads = Enum.reduce(0..height,heads,fn _line, heads -> 
+        advance_heads2(heads,grid)
+    end)
+
+     Enum.sum_by(heads,fn {_k,v} -> v end)
+  end
+
+  
+
+  def advance_heads(heads,splits,grid) do
+    Enum.reduce(heads,{MapSet.new(),splits},fn {x,y}=_head,acc -> 
+        {heads,splits} = acc
+        case Map.get(grid,{x,y+1}) do
+          :splitter -> {heads |> MapSet.put({x-1,y+1}) |> MapSet.put({x+1,y+1}), splits+1}
+          nil -> {heads |> MapSet.put({x,y+1}), splits}
+        end
+      end)
+  end
+
+ 
+  
+
+  def advance_heads2(heads,grid) do
+    Enum.reduce(heads,Map.new(),fn {{x,y},weight}=_head,acc -> 
+        case Map.get(grid,{x,y+1}) do
+          :splitter -> 
+            acc 
+            |> Map.update({x-1,y+1},weight,& (&1 + weight) )
+            |> Map.update({x+1,y+1},weight,& (&1 + weight) )
+          nil -> 
+            acc 
+            |> Map.update({x,y+1},weight,& (&1 + weight) )
+        end
+      end)
+  end
+
+  
+
+
+
+
+
+  
+
+  def parse(input) do
+    # return a dictionary with the positions
+    # of the splitters and the starting point
+    to_grid(input)
+  end
+
+  def to_grid(input), do: to_grid(input,{0,0},[])
+  def to_grid("",{_x,y},cells), do: {Map.new(cells),y}
+  def to_grid(<<"\n",rem::binary>>,{_x,y},cells), do: to_grid(rem,{0,y+1},cells)
+  def to_grid(<<"S",rem::binary>>,{x,y},cells) do
+    to_grid(rem,{x+1,y},[{"S",{x,y}}|cells])
+  end
+  def to_grid(<<"^",rem::binary>>,{x,y},cells) do
+    to_grid(rem,{x+1,y},[{{x,y},:splitter}|cells])
+  end
+  def to_grid(<<_char,rem::binary>>,{x,y},cells) do
+    to_grid(rem,{x+1,y},cells)
+  end
+end
+```
+
+```elixir
+import ExUnit.Assertions
+
+# test getting cells from binaries
+test = [
+  # hits a single splitter
+  {[ MapSet.new([{1,0}]),0, %{{1,1}=>:splitter} ], { MapSet.new([{0,1},{2,1}]), 1} },
+  # its no splitter
+  {[ MapSet.new([{1,0}]),0, %{} ], { MapSet.new([{1,1}]), 0} },
+  # two heads hit two splitters merging into 3 new heads
+  {[ MapSet.new([{1,0},{3,0}]),0, %{{1,1}=>:splitter, {3,1} => :splitter} ], { MapSet.new([{0,1},{2,1},{4,1}]), 2} },
+]
+
+Enum.each(test, fn {args,expected} -> 
+    assert apply(&Day7.advance_heads/3,args) == expected
+end)
+```
+
+```elixir
+example |> Day7.solve(:part1)
+```
+
+```elixir
+example |> Day7.solve(:part2)
+```
+
+```elixir
+Input.for_day(7) |> Day7.solve(:part2)
+```
+
+```elixir
+Input.for_day(7) |> Day7.solve(:part1)
+```
+
+```elixir
+Day7.parse(example)
+```
+
+```elixir
+
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 8
+
+```elixir
+example = """
+162,817,812
+57,618,57
+906,360,560
+592,479,940
+352,342,300
+466,668,158
+542,29,236
+431,825,988
+739,650,466
+52,470,668
+216,146,977
+819,987,18
+117,168,530
+805,96,715
+346,949,466
+970,615,88
+941,993,340
+862,61,35
+984,92,344
+425,690,689
+"""
+```
+
+```elixir
+defmodule Day8 do
+  def solve(input,:part1,take) do
+    boxes = parse(input)
+    pairs = pairs(boxes)
+
+    closest = pairs
+    |> Enum.map(fn {a,b} -> {a,b,distance(a,b)} end)
+    |> Enum.sort_by(fn {_a,_b,dist} -> dist end)
+    |> Enum.map(fn {a,b,_dist} -> {a,b} end)
+    |> Enum.take(take)
+
+    circuits = boxes |> Enum.with_index() |> Enum.into(%{})
+
+    circuits = closest 
+      |> Enum.reduce(circuits,fn pair,acc -> join(pair,acc) end)
+
+    circuits 
+    |> Enum.map(fn {_k,v} -> v end) 
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {_elem,freq} -> freq end, :desc)
+    |> Enum.take(3)
+    |> Enum.product_by(fn {_e,freq} -> freq end)
+    
+    
+  end
+
+  def solve(input,:part2) do
+    boxes = parse(input)
+    pairs = pairs(boxes)
+
+    closest = pairs
+    |> Enum.map(fn {a,b} -> {a,b,distance(a,b)} end)
+    |> Enum.sort_by(fn {_a,_b,dist} -> dist end)
+    |> Enum.map(fn {a,b,_dist} -> {a,b} end)
+
+    circuits = boxes |> Enum.with_index() |> Enum.into(%{})
+
+    {[x1,_,_],[x2,_,_]} = closest |> join_until_one_circuit(circuits,Enum.count(circuits))
+    x1 * x2
+  end
+
+  
+  def join_until_one_circuit([{a,b}|rem],circuits,numcircuits) do
+    numa = Map.get(circuits,a)
+    numb = Map.get(circuits,b)
+
+    cond do
+      numcircuits == 2 and numa != numb -> {a,b}
+      numa != numb -> join_until_one_circuit(rem,join({a,b},circuits),numcircuits-1)
+      numa == numb -> join_until_one_circuit(rem,circuits,numcircuits)
+    end
+  end
+  
+  def join({a,b},circuits) do
+    numa = Map.get(circuits,a)
+    numb = Map.get(circuits,b)
+
+    circuits
+    |> Enum.map(fn {k,v} -> 
+        case v == numb do
+          true -> {k,numa}
+          false -> {k,v}
+        end
+      end )
+    |> Enum.into(%{})
+  end
+
+  def pairs(topair) do
+    for a <- topair, b <- topair, a != b, reduce: MapSet.new() do
+      acc -> if a > b, do: MapSet.put(acc,{a,b}), else: MapSet.put(acc,{b,a})
+    end
+  end
+
+  def distance([x1,y1,z1],[x2,y2,z2]) do
+    a = Integer.pow(x1-x2,2) + Integer.pow(y1-y2,2) + Integer.pow(z1-z2,2)
+    :math.sqrt(a)
+  end
+
+  def parse(input) do
+    input
+    |> String.split(["\n",","],trim: true)
+    |> Stream.map(& String.to_integer/1)
+    |> Enum.chunk_every(3)
+  end
+end
+```
+
+```elixir
+example |> Day8.solve(:part2)
+```
+
+```elixir
+Input.for_day(8) |> Day8.solve(:part2)
+```
+
+```elixir
+example |> Day8.solve(:part1,10)
+```
+
+```elixir
+Input.for_day(8) |> Day8.solve(:part1,1000)
+```
+
+```elixir
+example |> Day8.parse()
+```
+
+## Day 9
+
+```elixir
+example = """
+7,1
+11,1
+11,7
+9,7
+9,5
+2,5
+2,3
+7,3
+"""
+```
+
+```elixir
+defmodule Day9 do
+  def solve(input,:part1) do
+    input 
+    |> parse() 
+    |> pairs()
+    |> Enum.max_by(& surface/1)
+    |> surface()
+  end
+
+
+  def surface({[x1,y1],[x2,y2]}) do
+    (abs(max(x1,x2)-min(x1,x2))+1) * (abs(max(y1,y2)-min(y1,y2))+1)
+  end
+  
+
+  def pairs(orig), do: pairs(orig,orig,orig,[])
+  def pairs(_orig,_,[],acc), do: Enum.reverse(acc)
+  def pairs(orig,[],[_e2|rest],acc), do: pairs(tl(orig),tl(orig),rest,acc)
+  def pairs(orig,[e1|rest],[e2|e2rest],acc) do
+    case e1 == e2 do
+      true -> pairs(orig,rest,[e2|e2rest],acc)
+      false -> pairs(orig,rest,[e2|e2rest],[{e1,e2}|acc])
+    end
+  end
+
+  def color(lines,vpix) do
+    {_,_,res} = for vx <- 0..Map.get(vpix,:width)-1, vy <- 0..Map.get(vpix,:height)-1, reduce: {false,false,vpix} do
+      {nextcol,switch_color,vpix} -> 
+        
+        {x,y,_} = Map.get(vpix,{vx,vy})
+        # {_,_,color_above} = Map.get(vpix,{vx,vy-1},{0,0,false})
+        # {_,_,color_left} = Map.get(vpix,{vx-1,vy},{0,0,false})
+
+        #pxcol = case {line_left?(lines,{x,y}),line_above?(lines,{x,y})} do
+        #  {false,false} -> color_above
+        #  {true,true} -> !color_above
+        #  {false,true} -> !color_above
+        #  {true,false} -> color_above
+        #end
+
+        cond do 
+          switch_color and on_line?(lines,{x,y}) -> {nextcol, true, Map.put(vpix,{vx,vy},{x,y,true})}
+          switch_color -> {nextcol, false, Map.put(vpix,{vx,vy},{x,y,nextcol})}
+          on_line?(lines,{x,y}) -> {!nextcol, true, Map.put(vpix,{vx,vy},{x,y,true})}
+          :else -> {nextcol, false, Map.put(vpix,{vx,vy},{x,y,nextcol})}
+        end
+    end
+
+    res
+  end
+
+  def on_line?(lines,pos) do
+    on_horizontal_line(lines,pos) || on_vertical_line(lines,pos)
+  end
+
+  def on_horizontal_line(lines,{x,y}) do
+    case Map.get(lines,{:y,y}) do
+      [p1,p2] -> x in Range.new(min(p1,p2),max(p1,p2))
+      nil -> false
+    end
+  end
+
+  def on_vertical_line(lines,{x,y}) do
+    case Map.get(lines,{:x,x}) do
+      [p1,p2] -> y in Range.new(min(p1,p2),max(p1,p2))
+      nil -> false
+    end
+  end
+
+  def line_above?(lines,{x,y}) do
+    case Map.get(lines,{:y,y}) do
+      [p1,p2] -> x in Range.new(min(p1,p2),max(p1,p2))
+      nil -> false
+    end
+  end
+
+  def line_left?(lines,{x,y}) do
+    case Map.get(lines,{:x,x}) do
+      [p1,p2] -> y in Range.new(min(p1,p2),max(p1,p2))
+      nil -> false
+    end
+  end
+
+  def lines(points) do
+    # each x and y only has one corresponding point on the same x and y axis
+    hlines = Enum.group_by(points,fn [_x,y] -> {:y,y} end, fn [x,_y] -> x end )
+    vlines = Enum.group_by(points,fn [x,_y] -> {:x,x} end, fn [_x,y] -> y end )
+    Map.merge(hlines,vlines)
+  end
+
+
+  def virtual_pixels(points) do
+    # a virtual pixel is the rectangular area of all points that can be filled
+    # it is not exactly one field in size, but the size is determined by
+    # the points on the x and y axis
+
+    xs = points |> Enum.map(fn [x,_y] -> x end) |> Enum.sort() |> Enum.dedup()
+    ys = points |> Enum.map(fn [_x,y] -> y end) |> Enum.sort() |> Enum.dedup()
+    
+    pix = for {y,idxy} <- Enum.with_index([0|ys]), {x,idxx} <- Enum.with_index([0|xs]), into: %{} do
+      { {idxx,idxy}, {x,y,false} }
+    end
+
+    pix
+    |> Map.put(:width,length(xs)+1) 
+    |> Map.put(:height,length(ys)+1)
+  end
+  
+
+  def parse(input) do
+    input 
+    |> String.split(["\n",","],trim: true) 
+    |> Enum.map(& String.to_integer/1)
+    |> Enum.chunk_every(2)
+  end
+end
+```
+
+```elixir
+#Input.for_day(9) |> Day9.parse() |> Day9.virtual_pixels() |> length()
+```
+
+```elixir
+import ExUnit.Assertions
+
+ExUnit.start()
+
+defmodule TestsPart2 do
+  use ExUnit.Case
+
+  test "single virtual pixel" do
+    expect = Map.new([pix(0,0,0,0),pix(1,0,2,0),pix(0,1,0,2),pix(1,1,2,2)])
+    expect = Map.merge(expect,%{width: 2, height: 2})
+    
+    assert Day9.virtual_pixels([[2,2]]) == expect
+  end
+
+  test "line above gets identified correctly" do
+    form = [[1,1],[2,1]] #h line
+    lines = Day9.lines(form)
+    assert Day9.line_above?(lines,{0,0}) == false
+    assert Day9.line_above?(lines,{0,1}) == false
+    assert Day9.line_above?(lines,{1,0}) == false
+    assert Day9.line_above?(lines,{1,1}) == true
+    assert Day9.line_above?(lines,{2,1}) == true
+    assert Day9.line_above?(lines,{3,1}) == false
+  end
+
+  test "coloring works" do
+    form = [[1,1],[5,1],[5,3],[1,3]]
+    
+    lines = Day9.lines(example())
+    vpix = Day9.virtual_pixels(example())
+
+    draw(vpix)
+    colored = Day9.color(lines,vpix)
+    draw(colored)
+    
+    assert colored == []
+  end
+
+  test "a single line" do
+    form = [[1,1],[1,3]]
+    expected = %{
+              {:x, 1} => [1, 3],
+              {:x, 5} => [1, 3],
+              {:y, 1} => [1, 5],
+              {:y, 3} => [5, 1]
+            }
+    assert Day9.lines(form) == expected
+  end
+  
+  test "lines" do
+    form = [[1,1],[5,1],[5,3],[1,3]]
+    expected = %{
+              {:x, 1} => [1, 3],
+              {:x, 5} => [1, 3],
+              {:y, 1} => [1, 5],
+              {:y, 3} => [5, 1]
+            }
+    assert Day9.lines(form) == expected
+  end
+
+  test "4 virtual pixels" do
+    form = rectangle()
+    lastpix = pix(2,2,20,20)
+    assert Enum.any?(Day9.virtual_pixels(form),& (&1 == lastpix))
+  end
+
+  test "virtual pixels on the whole input don't make us sweat" do
+    vp = Input.for_day(9) 
+    |> Day9.parse()
+    |> Day9.virtual_pixels()
+
+    assert Map.keys(vp) |> length() < 1_000_000
+  end
+
+  test "virtual pixel 2" do
+    form = [[1,1],[2,1],[2,2],[1,2]]
+    Day9.virtual_pixels(form)
+  end
+
+  test "input contains always two points on the same axis" do
+    f = Input.for_day(9) 
+    |> Day9.parse()
+    |> Enum.flat_map(& &1)
+    |> Enum.frequencies()
+    |> Enum.find(fn {_k,v} -> v !=2 end)
+
+    assert f==nil
+  end
+
+  def pix(x,y,realx,realy,color\\false) do
+    {{x,y},{realx,realy,color}}
+  end
+
+  def draw(vgrid) do
+    for vy <- 0..Map.get(vgrid,:height)-1, vx <- 0..Map.get(vgrid,:width)-1 do
+      {x,y,col} = Map.get(vgrid,{vx,vy})
+      towrite = case col do
+        true -> "x"
+        false -> "."
+      end
+      if x == 0 do
+        IO.write("\n")
+        IO.write(towrite)
+      else
+        IO.write(towrite)
+      end
+    end
+    IO.write("\n")
+  end
+
+  def example() do
+"""
+7,1
+11,1
+11,7
+9,7
+9,5
+2,5
+2,3
+7,3
+""" |> Day9.parse()
+  end
+
+  def rectangle() do
+    [[10,10],[20,10],[20,20],[10,20]]
+  end
+end
+
+
+ExUnit.run()
+```
+
+```elixir
+defmodule SVG do
+  def svg_for(text, w \\ 320, h \\ 120) do
+  """
+  <svg xmlns="http://www.w3.org/2000/svg" width="#{w}" height="#{h}" viewBox="0 0 #{w} #{h}">
+    <rect width="100%" height="100%" fill="#111827"/>
+    <circle cx="80" cy="#{div(h,2)}" r="36" fill="#ef4444"/>
+    <text x="170" y="#{div(h,2)+10}" font-family="sans-serif" font-size="20" fill="#fff">#{text}</text>
+  </svg>
+  """
+  end
+end
+
+
+Kino.Image.new(SVG.svg_for("hello"),:svg)
+
+```
+
+```elixir
+
+```
+
+```elixir
+example |> Day9.solve(:part1)
+```
+
+```elixir
+Input.for_day(9) |> Day9.solve(:part1)
+```
+
+```elixir
+import ExUnit.Assertions
+
+ExUnit.start()
+
+defmodule Tests do
+  use ExUnit.Case
+
+  test "parsing works" do
+    assert Day9.parse("1,2\n3,4\n") == [[1,2],[3,4]]
+  end
+
+  test "pairs work" do
+    assert Day9.pairs([1,2,3]) == [{2,1},{3,1},{3,2}]
+  end
+
+  test "surface" do
+    assert Day9.surface({[2,5],[11,1]}) == 50
+  end
+end
+
+
+ExUnit.run()
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Day 11
+
+```elixir
+example = """
+aaa: you hhh
+you: bbb ccc
+bbb: ddd eee
+ccc: ddd eee fff
+ddd: ggg
+eee: out
+fff: out
+ggg: out
+hhh: ccc fff iii
+iii: out
+"""
+
+```
+
+```elixir
+example2 = """
+svr: aaa bbb
+aaa: fft
+fft: ccc
+bbb: tty
+tty: ccc
+ccc: ddd eee
+ddd: hub
+hub: fff
+eee: dac
+dac: fff
+fff: ggg hhh
+ggg: out
+hhh: out
+"""
+```
+
+```elixir
+defmodule Day11 do
+  def solve(input,:part1) do
+    graph = input
+    |> parse()
+    |> to_graph()
+    |> add_reachable_count("you","out")
+
+    {"out",paths} = :digraph.vertex(graph,"out")
+    paths
+  end
+
+  def solve(input,:part2) do
+    input
+    |> parse()
+    |> to_graph()
+    |> paths_passing("svr","out",["dac","fft"])
+  end
+
+  def solve(input,:part1_alternative) do
+    input
+    |> parse()
+    |> to_graph()
+    |> paths_passing("you","out",[])
+  end
+
+  def add_reachable_count(graph,from,to) do
+    :digraph.add_vertex(graph,from,1)
+    _add_reachable_count(graph,to,from)
+    graph
+  end
+
+  def _add_reachable_count(graph,current,stop) do
+    
+    nweights = for n <- :digraph.in_neighbours(graph,current) do
+      {nvertex,nweight} = :digraph.vertex(graph,n)
+      
+      if nweight == nil do
+        _add_reachable_count(graph,nvertex,stop)
+        {_nvertex,nweight} = :digraph.vertex(graph,n)
+        nweight
+      else
+        nweight
+      end
+    end
+
+    case {nweights,current==stop} do
+      {[],false} -> :digraph.add_vertex(graph,current,0)
+      {[],true} -> :do_nothing # it's the root node
+      {w,false} -> Enum.sum(w) |> then(& :digraph.add_vertex(graph,current,&1)) 
+    end
+  end
+
+  def paths_passing(graph,from,to,passes_through) do
+    :digraph.add_vertex(graph,from,[ {[],1} ])
+    _paths_passing(graph,to,from,passes_through)
+    {_to,paths} = :digraph.vertex(graph,to)
+    {_,cnt} = Enum.find(paths,{passes_through,0}, fn {el,_} -> passes_through--el == [] end)
+    cnt
+  end
+
+  def _paths_passing(graph,current,stop,passes_through) do
+    npassed = for n <- :digraph.in_neighbours(graph,current) do
+      {nvertex,npassed} = :digraph.vertex(graph,n)
+      
+      if npassed == nil do
+        _paths_passing(graph,nvertex,stop,passes_through)
+        {_nvertex,npassed} = :digraph.vertex(graph,n)
+        npassed
+      else
+        npassed
+      end
+    end
+
+    # is a list of which pass through elements have been seen on the path
+    # e.g. [ {[a,b],1}, {[a],5}, {[b],3}, {[],20} ]
+    # if the current vertic is a pass through element, count it accordingly
+    passes = npassed
+      |> List.flatten()
+      |> Enum.group_by(fn {el,_} -> el end,fn {_el,cnt} -> cnt end)
+      |> Enum.map(fn {el,vals} -> {el,vals |> Enum.sum()} end)
+
+    passes = if current in passes_through do
+      # add current to each element
+      passes
+      |> Enum.map(fn {el,cnt} -> 
+          case current in el do
+            true -> {el,cnt}
+            false -> {[current|el] |> Enum.sort(), cnt}
+          end
+        end)
+    else
+      passes
+    end
+
+    case npassed do
+      [] -> :digraph.add_vertex(graph,current,[{[],0}])
+      _else -> :digraph.add_vertex(graph,current,passes)
+    end
+    
+  end
+  
+  def parse(input) do
+    input
+    |> String.split([":","\n"],trim: true)
+    |> Enum.chunk_every(2)
+    |> Enum.map(fn [source,dest] -> 
+        {source,String.split(dest)}
+      end)
+  end
+
+  def to_graph(inputs) do
+    # expects [{from,[to,to,to,...]}]
+    graph = :digraph.new()
+
+    Enum.each(inputs,fn {source,targets} -> 
+      :digraph.add_vertex(graph,source,nil)
+      for target <- targets do
+        :digraph.add_vertex(graph,target,nil)
+        :digraph.add_edge(graph,source,target)
+      end
+    end
+    )
+
+    graph
+    
+  end
+end
+```
+
+```elixir
+example2 |> Day11.solve(:part2)
+```
+
+```elixir
+Input.for_day(11) |> Day11.solve(:part2)
+```
+
+```elixir
+example |> Day11.solve(:part3)
+```
+
+```elixir
+defmodule Day11TestsPart2 do
+  use ExUnit.Case, async: false
+
+  test "single pass passing through 2 elements" do
+    graph = Day11.to_graph([{:start,[:f1]},{:f1,[:f2]},{:f2,[:ignore]},{:ignore,[:end]}])
+    expected = 1
+    assert Day11.paths_passing(graph,:start,:end,[:f1,:f2]) == expected
+  end
+
+  test "single pass not passing through required elements" do
+    graph = Day11.to_graph([ft(:st,:a),ft(:a,:b),ft(:b,:end)])
+    expected = 0
+    assert Day11.paths_passing(graph,:start,:end,[:c]) == expected
+  end
+
+  test "one path with all required required elements" do
+    graph = Day11.to_graph([ft(:st,:a),ft(:st,:b),ft(:a,:b),ft(:b,:end)])
+    expected = 1
+    assert Day11.paths_passing(graph,:st,:end,[:a,:b]) == expected
+  end
+
+  def ft(from,to1) do
+    {from,[to1]}
+  end
+  def ft(from,to1,to2) do
+    {from,[to1,to2]}
+  end
+end
+
+ExUnit.run()
+```
+
+```elixir
+defmodule Day11Tests do
+  use ExUnit.Case
+
+  test "graph is correct" do
+    graph = Day11.to_graph([{:a,[:b]}])
+    assert :digraph.vertices(graph) -- [:a,:b] == []
+    assert length(:digraph.edges(graph)) == 1
+    assert {:b,nil} = :digraph.vertex(graph,:b)
+  end
+
+  test "count on a simple graph works" do
+    graph = Day11.to_graph([{:a,[:b]}])
+    graph = Day11.add_reachable_count(graph,:a,:b)
+    assert {:b,1} == :digraph.vertex(graph,:b)
+  end
+
+  test "count on a simple graph with a fork" do
+    graph = Day11.to_graph([{:in,[:a,:b]},{:a,[:out]},{:b,[:out]}])
+    graph = Day11.add_reachable_count(graph,:in,:out)
+    assert {:out,2} == :digraph.vertex(graph,:out)
+  end
+
+  test "count on a simple graph with a fork an join" do
+    graph = Day11.to_graph([{:in,[:a,:b]},{:a,[:out]},{:b,[:a,:out]}])
+    graph = Day11.add_reachable_count(graph,:in,:out)
+    assert {:out,3} == :digraph.vertex(graph,:out)
+  end
+end
+
+ExUnit.run()
+```
+
+```elixir
+Input.for_day(11) |> Day11.solve(:part1)
+```
+
+```elixir
+Input.for_day(11) |> Day11.solve(:part3)
 ```
